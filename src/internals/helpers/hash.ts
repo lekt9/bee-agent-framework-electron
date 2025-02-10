@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-import { createHash as _createHash, randomBytes } from "node:crypto";
+import * as CryptoJS from "crypto-js";
 
 export function createHash(input: string, length = 4) {
-  return _createHash("shake256", {
-    outputLength: length,
-  })
-    .update(input)
-    .digest("hex");
+  return CryptoJS.SHA256(input).toString(CryptoJS.enc.Hex).substring(0, length);
 }
 
 export function createRandomHash(length = 4) {
-  return createHash(randomBytes(20).toString("base64"), length);
+  const randomBytes = CryptoJS.lib.WordArray.random(20);
+  return createHash(randomBytes.toString(CryptoJS.enc.Base64), length);
 }
