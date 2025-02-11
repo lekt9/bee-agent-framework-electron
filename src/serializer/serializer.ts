@@ -18,7 +18,6 @@ import * as R from "remeda";
 import { Serializable, SerializableClass } from "@/internals/serializable.js";
 import { AnyConstructable, ClassConstructor, NamedFunction } from "@/internals/types.js";
 import { SafeWeakMap, SafeWeakSet } from "@/internals/helpers/weakRef.js";
-import { deserializeError, serializeError } from "serialize-error";
 import { Version } from "@/version.js";
 import {
   extractClassName,
@@ -46,6 +45,43 @@ import { ZodType } from "zod";
 import { toJsonSchema } from "@/internals/helpers/schema.js";
 import { createAbortController } from "@/internals/helpers/cancellation.js";
 import { hasMinLength } from "@/internals/helpers/array.js";
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+// Custom error serialization
+function serializeError(error: Error): Record<string, any> {
+  const serialized: Record<string, any> = {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  };
+
+  // Copy all enumerable properties
+  for (const key of Object.keys(error)) {
+    if (key !== 'name' && key !== 'message' && key !== 'stack') {
+      serialized[key] = (error as any)[key];
+    }
+  }
+
+  return serialized;
+}
+
+function deserializeError(errorObject: Record<string, any>): Error {
+  const error = new Error(errorObject.message);
+  error.name = errorObject.name;
+  error.stack = errorObject.stack;
+
+  // Copy all additional properties
+  for (const key of Object.keys(errorObject)) {
+    if (key !== 'name' && key !== 'message' && key !== 'stack') {
+      (error as any)[key] = errorObject[key];
+    }
+  }
+
+  return error;
+}
+
+// Initialize the module synchronously
 
 export interface SerializeFactory<A = unknown, B = unknown> {
   ref: ClassConstructor<A> | NamedFunction<A>;

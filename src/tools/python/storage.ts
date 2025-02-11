@@ -15,14 +15,13 @@
  */
 
 import { PathLike } from "fs";
-import * as crypto from "node:crypto";
-import { pipeline } from "node:stream/promises";
-import fs, { createReadStream } from "node:fs";
+import fs from "node:fs";
 import { copyFile } from "node:fs/promises";
 import path from "node:path";
 import { Cache } from "@/cache/decoratorCache.js";
 import { Serializable } from "@/internals/serializable.js";
 import { shallowCopy } from "@/serializer/utils.js";
+import { SHA256 } from "crypto-js";
 
 export interface PythonFile {
   id: string;
@@ -169,9 +168,8 @@ export class LocalPythonStorage extends PythonStorage {
   }
 
   protected async computeHash(file: PathLike) {
-    const hash = crypto.createHash("sha256");
-    await pipeline(createReadStream(file), hash);
-    return hash.digest("hex");
+    const content = await fs.promises.readFile(file);
+    return SHA256(content.toString()).toString();
   }
 
   createSnapshot() {
