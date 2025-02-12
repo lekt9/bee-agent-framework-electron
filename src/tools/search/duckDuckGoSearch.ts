@@ -15,8 +15,7 @@
  */
 
 import { SearchOptions, search as rawDDGSearch, SafeSearchType } from "duck-duck-scrape";
-import { stripHtml } from "string-strip-html";
-import pThrottle, { Options as ThrottleOptions } from "p-throttle";
+import type { Options as ThrottleOptions } from "p-throttle";
 import {
   SearchToolOptions,
   SearchToolOutput,
@@ -83,7 +82,7 @@ export class DuckDuckGoSearchTool extends Tool<
       creator: this,
     });
 
-  protected readonly client: typeof rawDDGSearch;
+  protected readonly client: any;
 
   @Cache()
   inputSchema() {
@@ -102,8 +101,9 @@ export class DuckDuckGoSearchTool extends Tool<
     this.register();
   }
 
-  protected _createClient() {
+  protected async _createClient() {
     const { throttle } = this.options;
+    const pThrottle = (await import("p-throttle")).default;
 
     return throttle === false
       ? rawDDGSearch
@@ -120,8 +120,15 @@ export class DuckDuckGoSearchTool extends Tool<
     run: RunContext<this>,
   ) {
     const headers = new HeaderGenerator().getHeaders();
+    const { stripHtml } = await import("string-strip-html");
 
-    const results = await paginate({
+    interface SearchResult {
+      title: string;
+      description: string;
+      url: string;
+    }
+
+    const results = await paginate<SearchResult>({
       size: this.options.maxResults,
       handler: async ({ cursor = 0 }) => {
         const { results: data, noResults: done } = await this.client(
@@ -138,7 +145,7 @@ export class DuckDuckGoSearchTool extends Tool<
             ...this.options?.httpClientOptions,
             ...options?.httpClientOptions,
             signal: run.signal,
-            uri_modifier: (rawUrl) => {
+            uri_modifier: (rawUrl: string) => {
               const url = new URL(rawUrl);
               url.searchParams.delete("ss_mkt");
               return url.toString();
@@ -147,7 +154,7 @@ export class DuckDuckGoSearchTool extends Tool<
         );
 
         return {
-          data,
+          data: data as SearchResult[],
           nextCursor: done ? undefined : cursor + data.length,
         };
       },

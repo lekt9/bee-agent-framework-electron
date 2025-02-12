@@ -119,6 +119,9 @@ export class BeeAgent extends BaseAgent<BeeRunInput, BeeRunOutput, BeeRunOptions
     options: BeeRunOptions = {},
     run: GetRunContext<typeof this>,
   ): Promise<BeeRunOutput> {
+    console.log('Starting BeeAgent._run with input:', input);
+    console.log('Runner options:', options);
+    
     const runner = new this.runner(
       this.input,
       {
@@ -132,19 +135,30 @@ export class BeeAgent extends BaseAgent<BeeRunInput, BeeRunOutput, BeeRunOptions
       },
       run,
     );
+    console.log('Created runner instance:', runner.constructor.name);
+    
     await runner.init(input);
+    console.log('Runner initialized');
 
     let finalMessage: BaseMessage | undefined;
     while (!finalMessage) {
+      console.log('Starting new iteration');
       const { state, meta, emitter, signal } = await runner.createIteration();
+      console.log('Iteration state:', state);
+      console.log('Iteration meta:', meta);
 
       if (state.tool_name && state.tool_input) {
+        console.log('Tool execution requested:', {
+          name: state.tool_name,
+          input: state.tool_input
+        });
         const { output, success } = await runner.tool({
           state,
           emitter,
           meta,
           signal,
         });
+        console.log('Tool execution result:', output);
         await runner.memory.add(
           BaseMessage.of({
             role: Role.ASSISTANT,
@@ -177,6 +191,7 @@ export class BeeAgent extends BaseAgent<BeeRunInput, BeeRunOutput, BeeRunOptions
             createdAt: new Date(),
           },
         });
+        console.log('Final answer generated:', finalMessage);
         await runner.memory.add(finalMessage);
         await emitter.emit("success", {
           data: finalMessage,
@@ -200,6 +215,7 @@ export class BeeAgent extends BaseAgent<BeeRunInput, BeeRunOutput, BeeRunOptions
     }
 
     await this.input.memory.add(finalMessage);
+    console.log('Run completed with result:', finalMessage);
     return { result: finalMessage, iterations: runner.iterations, memory: runner.memory };
   }
 

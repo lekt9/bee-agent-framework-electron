@@ -43,18 +43,66 @@ export function toJsonSchema<T extends AnySchemaLike>(
   schema: T,
   options?: Partial<Options>,
 ): SchemaObject {
+  console.log('Input schema type:', schema?.constructor?.name);
   validateSchema(schema);
-  if (schema instanceof ZodType) {
-    return zodToJsonSchema(schema, options);
+
+  // Handle both ZodType and raw SchemaObject
+  const convertToJsonSchema = (inputSchema: AnySchemaLike): SchemaObject => {
+    // Check if it's a Zod object by looking for _def and typeName
+    if (inputSchema && typeof inputSchema === 'object' && '_def' in inputSchema && 
+        (inputSchema as any)._def?.typeName?.startsWith('Zod')) {
+      console.log('Converting Zod schema to JSON Schema');
+      const converted = zodToJsonSchema(inputSchema as ZodType, {
+        ...options,
+        target: "jsonSchema7",
+        errorMessages: true,
+      });
+      console.log('Converted schema:', JSON.stringify(converted, null, 2));
+      return converted;
+    }
+    console.log('Using raw schema object');
+    return inputSchema;
+  };
+
+  const jsonSchema = convertToJsonSchema(schema);
+
+  // Ensure schema has proper structure
+  if (typeof jsonSchema === "object" && jsonSchema !== null) {
+    const schemaObj = jsonSchema as SchemaObject & {
+      properties?: Record<string, unknown>;
+      required?: string[];
+      type?: string;
+    };
+
+    // Handle required fields for objects
+    if (schemaObj.type === "object" || schemaObj.properties) {
+      if (!schemaObj.required) {
+        schemaObj.required = [];
+      } else if (!Array.isArray(schemaObj.required)) {
+        schemaObj.required = Object.keys(schemaObj.properties || {});
+      }
+    }
+
+    // Ensure all nested objects also have proper required arrays
+    if (schemaObj.properties) {
+      Object.entries(schemaObj.properties).forEach(([key, value]) => {
+        if (typeof value === 'object' && value !== null) {
+          schemaObj.properties![key] = toJsonSchema(value as AnySchemaLike);
+        }
+      });
+    }
   }
-  return schema;
+
+  return jsonSchema;
 }
 
 export function createSchemaValidator<T extends AnySchemaLike>(
   schema: T,
   options?: AjvOptions,
 ): ValidateFunction<FromSchemaLike<T>> {
+  console.log('Creating schema validator');
   const jsonSchema = toJsonSchema(schema);
+  console.log('Schema for validation:', JSON.stringify(jsonSchema, null, 2));
 
   const ajv = new Ajv({
     coerceTypes: "array",
@@ -70,8 +118,30 @@ export function createSchemaValidator<T extends AnySchemaLike>(
     allowUnionTypes: true,
     ...options,
   });
+  console.log('Ajv options:', {
+    coerceTypes: "array",
+    useDefaults: true,
+    strict: false,
+    strictSchema: false,
+    strictTuples: true,
+    strictNumbers: true,
+    strictTypes: true,
+    strictRequired: true,
+    parseDate: true,
+    allowDate: true,
+    allowUnionTypes: true,
+    ...options,
+  });
+  
   addFormats.default(ajv);
-  return ajv.compile<FromSchemaLike<T>>(jsonSchema);
+  try {
+    const validator = ajv.compile<FromSchemaLike<T>>(jsonSchema);
+    console.log('Validator compiled successfully');
+    return validator;
+  } catch (error) {
+    console.error('Error compiling schema:', error);
+    throw error;
+  }
 }
 
 interface ParseBrokenJsonOptions {

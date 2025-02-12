@@ -160,115 +160,64 @@ export class DefaultRunner extends BaseRunner {
   }
 
   async tool({ state, signal, meta, emitter }: BeeRunnerToolInput) {
-    const tool = this.input.tools.find(
-      (tool) => tool.name.trim().toUpperCase() == state.tool_name?.trim()?.toUpperCase(),
-    );
+    console.log('DefaultRunner.tool called with state:', state);
+    
+    const tool = this.input.tools.find((t) => t.name === state.tool_name);
     if (!tool) {
-      this.failedAttemptsCounter.use(
-        new AgentError(`Agent was trying to use non-existing tool "${state.tool_name}"`, [], {
-          context: { state, meta },
+      console.log('Tool not found:', state.tool_name);
+      throw new AgentError(
+        await this.defaultTemplates.toolNotFoundError.render({
+          tool_name: state.tool_name,
+          available_tools: this.input.tools.map((t) => t.name),
         }),
       );
+    }
+    console.log('Found tool:', tool.name);
+
+    try {
+      console.log('Attempting to parse tool input:', state.tool_input);
+      const parsedInput = await tool.parse(state.tool_input);
+      console.log('Parsed tool input:', parsedInput);
+
+      console.log('Executing tool');
+      const output = await tool.run(parsedInput, { signal });
+      console.log('Tool execution successful:', output);
+
+      await emitter.emit("update", {
+        data: state,
+        update: {
+          key: "tool_output",
+          value: output.getTextContent(),
+          parsedValue: output,
+        },
+        meta: { ...meta, success: true },
+        memory: this.memory,
+      });
 
       return {
-        success: false,
-        output: this.templates.toolNotFoundError.render({
-          tools: this.input.tools,
-        }),
+        output: output.getTextContent(),
+        success: true,
       };
+    } catch (error) {
+      console.error('Tool execution failed:', error);
+      if (error instanceof ToolInputValidationError) {
+        console.log('Input validation error');
+        throw new AgentError(
+          await this.defaultTemplates.toolInputError.render({
+            tool_name: tool.name,
+            error_message: error.message,
+            validation_errors: error.validationErrors,
+          }),
+        );
+      }
+
+      throw new AgentError(
+        await this.defaultTemplates.toolError.render({
+          tool_name: tool.name,
+          error_message: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
-
-    return new Retryable({
-      config: {
-        signal,
-        maxRetries: this.options.execution?.maxRetriesPerStep,
-      },
-      onError: async (error) => {
-        await emitter.emit("toolError", {
-          data: {
-            iteration: state,
-            tool,
-            input: state.tool_input,
-            options: this.options,
-            error: FrameworkError.ensure(error),
-          },
-          meta,
-        });
-        this.failedAttemptsCounter.use(error);
-      },
-      executor: async () => {
-        const toolOptions = shallowCopy(this.options);
-
-        try {
-          await emitter.emit("toolStart", {
-            data: {
-              tool,
-              input: state.tool_input,
-              options: toolOptions,
-              iteration: state,
-            },
-            meta,
-          });
-          const toolOutput: ToolOutput = await tool.run(state.tool_input, toolOptions).context({
-            [Tool.contextKeys.Memory]: this.memory,
-          });
-          await emitter.emit("toolSuccess", {
-            data: {
-              tool,
-              input: state.tool_input,
-              options: toolOptions,
-              result: toolOutput,
-              iteration: state,
-            },
-            meta,
-          });
-
-          if (toolOutput.isEmpty()) {
-            return { output: this.templates.toolNoResultError.render({}), success: true };
-          }
-
-          return {
-            success: true,
-            output: toolOutput.getTextContent(),
-          };
-        } catch (error) {
-          await emitter.emit("toolError", {
-            data: {
-              tool,
-              input: state.tool_input,
-              options: toolOptions,
-              error,
-              iteration: state,
-            },
-            meta,
-          });
-
-          if (error instanceof ToolInputValidationError) {
-            this.failedAttemptsCounter.use(error);
-
-            return {
-              success: false,
-              output: this.templates.toolInputError.render({
-                reason: error.toString(),
-              }),
-            };
-          }
-
-          if (error instanceof ToolError) {
-            this.failedAttemptsCounter.use(error);
-
-            return {
-              success: false,
-              output: this.templates.toolError.render({
-                reason: error.explain(),
-              }),
-            };
-          }
-
-          throw error;
-        }
-      },
-    }).get();
   }
 
   @Cache({ enumerable: false })
@@ -279,7 +228,7 @@ export class DefaultRunner extends BaseRunner {
           prompt !== null || this.input.memory.isEmpty()
             ? BaseMessage.of({
                 role: Role.USER,
-                text: prompt || this.templates.userEmpty.render({}),
+                text: prompt || this.defaultTemplates.userEmpty.render({}),
                 meta: {
                   createdAt: new Date(),
                 },
@@ -307,7 +256,7 @@ export class DefaultRunner extends BaseRunner {
         message: async () =>
           BaseMessage.of({
             role: Role.SYSTEM,
-            text: this.templates.system.render({
+            text: this.defaultTemplates.system.render({
               tools: await self.system.variables.tools(),
               instructions: undefined,
               createdAt: new Date().toISOString(),
@@ -330,8 +279,8 @@ export class DefaultRunner extends BaseRunner {
         if (message.role === Role.USER) {
           const isEmpty = !message.text.trim();
           const text = isEmpty
-            ? (this.templates?.userEmpty ?? BeeUserEmptyPrompt).render({})
-            : (this.templates?.user ?? BeeUserPrompt).render({
+            ? (this.defaultTemplates?.userEmpty ?? BeeUserEmptyPrompt).render({})
+            : (this.defaultTemplates?.user ?? BeeUserPrompt).render({
                 input: message.text,
                 meta: {
                   ...message?.meta,

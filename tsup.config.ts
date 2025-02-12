@@ -28,6 +28,24 @@ export default defineConfig({
       },
     },
     {
+      name: "fix-esm-imports",
+      renderChunk(code) {
+        if (this.format === "esm") {
+          // Handle ESM-only modules
+          const esmOnlyModules = ["string-strip-html", "p-throttle"];
+          const esmImports = new RegExp(
+            `import\\s+.*?from\\s+(['"])(${esmOnlyModules.join("|")})(['"])`,
+            "g",
+          );
+          return {
+            code: code.replace(esmImports, (match, q1, mod, q2) => {
+              return `const { ${mod.replace(/-/g, "_")} } = await import(${q1}${mod}${q2})`;
+            }),
+          };
+        }
+      },
+    },
+    {
       name: "override-swc",
       esbuildOptions: (options) => {
         const plugin = options.plugins?.find((p) => p.name === "swc");
@@ -89,6 +107,10 @@ export default defineConfig({
   treeshake: true,
   shims: true,
   skipNodeModulesBundle: true,
+  esbuildOptions(options) {
+    options.conditions = ["import", "module"];
+    options.format = "esm";
+  },
   legacyOutput: false,
   bundle: false,
   splitting: false,
