@@ -176,8 +176,22 @@ export class DefaultRunner extends BaseRunner {
 
     try {
       console.log('Attempting to parse tool input:', state.tool_input);
-      const parsedInput = await tool.parse(state.tool_input);
-      console.log('Parsed tool input:', parsedInput);
+      let parsedInput;
+      try {
+        parsedInput = await tool.parse(state.tool_input);
+        console.log('Parsed tool input:', parsedInput);
+      } catch (parseError) {
+        console.error('Tool input parsing failed:', parseError);
+        const errorMessage = `Failed to parse input for tool ${tool.name}: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
+        const validationErrors = parseError instanceof Error ? [{
+          keyword: 'custom',
+          instancePath: '',
+          schemaPath: '#/custom',
+          params: {},
+          message: parseError.message
+        }] : undefined;
+        throw new ToolInputValidationError(errorMessage, validationErrors);
+      }
 
       console.log('Executing tool');
       const output = await tool.run(parsedInput, { signal });

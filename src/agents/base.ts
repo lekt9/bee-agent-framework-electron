@@ -53,16 +53,31 @@ export abstract class BaseAgent<
       { signal: options?.signal, params: [input, options] as const },
       async (context) => {
         try {
+          console.log('Starting agent run with:', { 
+            agentType: this.constructor.name,
+            input,
+            options 
+          });
           this.isRunning = true;
           // @ts-expect-error
           return await this._run(input, options, context);
         } catch (e) {
+          console.error('Agent run error:', {
+            error: e,
+            stack: e instanceof Error ? e.stack : undefined,
+            cause: e instanceof Error ? e.cause : undefined
+          });
+          
           if (e instanceof AgentError) {
             throw e;
           } else {
-            throw new AgentError(`Error has occurred!`, [e]);
+            throw new AgentError(
+              `Error has occurred in ${this.constructor.name}: ${e instanceof Error ? e.message : String(e)}`,
+              [e]
+            );
           }
         } finally {
+          console.log('Agent run completed');
           this.isRunning = false;
         }
       },

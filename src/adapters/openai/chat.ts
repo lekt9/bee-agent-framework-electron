@@ -96,7 +96,7 @@ export class OpenAIChatLLMOutput extends ChatLLMOutput {
 }
 
 interface Input {
-  modelId?: ChatModel;
+  modelId?: string;
   client?: OpenAI | AzureOpenAI;
   clientOptions?: ClientOptions | AzureClientOptions;
   parameters?: Partial<Parameters>;
