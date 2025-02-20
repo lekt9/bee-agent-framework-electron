@@ -17,11 +17,10 @@
 import { createHash as _createHash, randomBytes } from "node:crypto";
 
 export function createHash(input: string, length = 4) {
-  return _createHash("shake256", {
-    outputLength: length,
-  })
+  const hash = _createHash("sha256")
     .update(input)
     .digest("hex");
+  return hash.slice(0, length);
 }
 
 export function createRandomHash(length = 4) {

@@ -109,7 +109,6 @@
   "types": "./dist/index.d.ts",
   "sideEffects": false,
   "exports": {
-    "./package.json": "./package.json",
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
