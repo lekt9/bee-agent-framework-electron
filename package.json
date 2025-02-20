@@ -1,6 +1,6 @@
 {
-  "name": "bee-agent-framework",
-  "version": "0.1.2",
+  "name": "beeai-framework-electron",
+  "version": "0.1.21",
   "license": "Apache-2.0",
   "description": "Bee - LLM Agent Framework",
   "author": "IBM Corp.",
@@ -102,7 +102,6 @@
   "types": "./dist/index.d.ts",
   "sideEffects": false,
   "exports": {
-    "./package.json": "./package.json",
     ".": {
       "import": {
         "types": "./dist/index.d.ts",

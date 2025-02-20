@@ -18,7 +18,6 @@ import * as R from "remeda";
 import { Serializable, SerializableClass } from "@/internals/serializable.js";
 import { AnyConstructable, ClassConstructor, NamedFunction } from "@/internals/types.js";
 import { SafeWeakMap, SafeWeakSet } from "@/internals/helpers/weakRef.js";
-import { deserializeError, serializeError } from "serialize-error";
 import { Version } from "@/version.js";
 import {
   extractClassName,
@@ -546,8 +545,14 @@ Serializer.register(Function, {
 });
 
 Serializer.register(Error, {
-  toPlain: (value) => serializeError(value),
-  fromPlain: (value) => deserializeError(value),
+  toPlain: async (value) => {
+    const { serializeError } = await import("serialize-error");
+    return serializeError(value);
+  },
+  fromPlain: async (value) => {
+    const { deserializeError } = await import("serialize-error");
+    return deserializeError(value);
+  },
 });
 Serializer.register(RegExp, {
   toPlain: (value) => ({ source: value.source, flags: value.flags }),
